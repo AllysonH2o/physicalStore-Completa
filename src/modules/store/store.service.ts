@@ -3,32 +3,49 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Store, StoreDocument } from './schemas/store.schema';
 import { CreateStoreDto } from './dtos/create-store.dto';
-import { ViaCepDto } from './dtos/viacep.dto';
-import axios from 'axios';
+import { ViaCepService } from 'src/common/external-apis/viaCep/viacep.service';
+import { GoogleService } from 'src/common/external-apis/google/google.service';
 
 @Injectable()
 export class StoreService {
   constructor(
     @InjectModel(Store.name) private storeModel: Model<StoreDocument>,
+    private readonly viaCepService: ViaCepService,
+    private readonly googleService: GoogleService,
   ) {}
 
   async create(createStoreDto: CreateStoreDto) {
     const { postalCode } = createStoreDto;
 
     try {
-      const result = await axios.get(
-        `https://viacep.com.br/ws/${postalCode}/json`,
-      );
-      const viaCep: ViaCepDto = result.data;
+      const viaCep = await this.viaCepService.viaCep(postalCode);
+
+      if (viaCep.erro) throw new Error('cep não encontrado');
+
+      const {
+        logradouro: address,
+        bairro: district,
+        localidade: city,
+        estado: state,
+        uf,
+      } = viaCep;
+
+      const addressGoogle = `${address.replace(/ /g, '+')},+${city.replace(
+        / /g,
+        '+',
+      )},+${uf}`;
+
+      const coords = await this.googleService.getCoords(addressGoogle);
 
       const createStore: Store = {
         storeName: createStoreDto.storeName,
-        address: viaCep.logradouro,
-        city: viaCep.localidade,
-        district: viaCep.bairro,
-        state: viaCep.estado,
+        latitude: coords.lat,
+        longitude: coords.lng,
+        address,
+        city,
+        district,
+        state,
         type: createStoreDto.type,
-        country: 'Brasil',
         postalCode: viaCep.cep,
         telephoneNumber: createStoreDto.telephoneNumber,
         emailAddress: createStoreDto.emailAddress,
