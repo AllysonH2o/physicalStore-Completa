@@ -1,17 +1,8 @@
-type StoreType = 'PDV' | 'LOJA';
-
-class Preco {
-  prazo: string;
-  price: string;
-  description: string;
-}
+import { StoreDto } from './store.dto';
 
 export class ResponseStoreDto {
-  name: string;
-  city: string;
-  postalCode: string;
-  type: StoreType;
-  distance: string;
-  distanceValue?: number;
-  value: Preco[];
+  store: StoreDto;
+  limit: number;
+  offset: number;
+  total: number;
 }

@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Store, StoreDocument } from './schemas/store.schema';
 import { CreateStoreDto } from './dtos/create-store.dto';
+import { StoreDto } from './dtos/store.dto';
 import { ResponseStoreDto } from './dtos/response-store.dto';
 import { ViaCepService } from 'src/common/external-apis/viaCep/viacep.service';
 import { GoogleService } from 'src/common/external-apis/google/google.service';
@@ -20,44 +21,24 @@ export class StoreService {
   async create(createStoreDto: CreateStoreDto) {
     const { postalCode } = createStoreDto;
 
-    try {
-      const viaCep = await this.viaCepService.viaCep(postalCode);
+    const infoStore = await this.getInfo(postalCode);
 
-      if (viaCep.erro) throw new Error('cep não encontrado');
+    const createStore: Store = {
+      storeName: createStoreDto.storeName,
+      latitude: infoStore.latitude,
+      longitude: infoStore.longitude,
+      address: infoStore.address,
+      city: infoStore.city,
+      district: infoStore.district,
+      state: infoStore.state,
+      type: createStoreDto.type,
+      postalCode: infoStore.postalCode,
+      telephoneNumber: createStoreDto.telephoneNumber,
+      emailAddress: createStoreDto.emailAddress,
+    };
 
-      const {
-        logradouro: address,
-        bairro: district,
-        localidade: city,
-        uf: state,
-      } = viaCep;
-
-      const addressGoogle = `${address.replace(/ /g, '+')},+${city.replace(
-        / /g,
-        '+',
-      )},+${state}`;
-
-      const coords = await this.googleService.getCoords(addressGoogle);
-
-      const createStore: Store = {
-        storeName: createStoreDto.storeName,
-        latitude: coords.lat,
-        longitude: coords.lng,
-        address,
-        city,
-        district,
-        state,
-        type: createStoreDto.type,
-        postalCode: viaCep.cep,
-        telephoneNumber: createStoreDto.telephoneNumber,
-        emailAddress: createStoreDto.emailAddress,
-      };
-
-      const newStore = new this.storeModel(createStore);
-      return newStore.save();
-    } catch (error) {
-      throw new Error('cep não encontrado');
-    }
+    const newStore = new this.storeModel(createStore);
+    return newStore.save();
   }
 
   async findAll(): Promise<Store[]> {
@@ -65,67 +46,109 @@ export class StoreService {
   }
 
   async findByCep(postalCode: string): Promise<ResponseStoreDto> {
-    try {
-      const viaCep = await this.viaCepService.viaCep(postalCode);
+    const infoStore = await this.getInfo(postalCode);
 
-      if (viaCep.erro) throw new Error('cep não encontrado');
+    const origin = `${infoStore.latitude},${infoStore.longitude}`;
 
-      const origin = `${viaCep.logradouro.replace(/ /g, '+')},${viaCep.uf}`;
+    const stores = await this.storeModel.find().exec();
 
-      const stores = await this.storeModel.find().exec();
+    const store = await this.getStore(stores, origin, postalCode);
 
-      const destinations = stores
-        .map((store) => `${store.address.replace(/ /g, '+')},${store.state}`)
-        .join('|');
+    return store;
+  }
 
-      const distance = await this.googleService.getDistance(
-        origin,
-        destinations,
+  private async getInfo(postalCode: string) {
+    const viaCep = await this.viaCepService.viaCep(postalCode);
+
+    if (viaCep.erro) throw new Error('cep não encontrado');
+
+    const {
+      logradouro: address,
+      bairro: district,
+      localidade: city,
+      uf: state,
+    } = viaCep;
+
+    const addressGoogle = `${address.replace(/ /g, '+')},+${city.replace(
+      / /g,
+      '+',
+    )},+${state}`;
+
+    const coords = await this.googleService.getCoords(addressGoogle);
+
+    const infoStore = {
+      latitude: coords.lat,
+      longitude: coords.lng,
+      address,
+      city,
+      district,
+      state,
+      postalCode: viaCep.cep,
+    };
+    return infoStore;
+  }
+
+  private async getStore(stores: Store[], origin: string, postalCode: string) {
+    const destinations = stores
+      .map((store) => `${store.latitude},${store.longitude}`)
+      .join('|');
+
+    const distance = await this.googleService.getDistance(origin, destinations);
+
+    const result: StoreDto[] = [];
+
+    for (let i = 0; i < stores.length; i++) {
+      const store = {
+        name: stores[i].storeName,
+        city: stores[i].city,
+        postalCode: stores[i].postalCode,
+        type: stores[i].type,
+        distance: distance[i].distance.text,
+        distanceValue: distance[i].distance.value,
+        value: [
+          {
+            prazo: `${stores[i].shippingTimeInDays} dias úteis`,
+            price: `R$ 15,00`,
+            description: `Motoboy`,
+          },
+        ],
+        pin: {
+          position: {
+            lat: stores[i].latitude,
+            lng: stores[i].longitude,
+          },
+          title: stores[i].storeName,
+        },
+      };
+      result.push(store);
+    }
+
+    result.sort((a, b) => a.distanceValue! - b.distanceValue!);
+
+    if (result[0].type === 'LOJA' || result[0].distanceValue! > 50000) {
+      const melhorEnvio = await this.melhorEnvioService.getPreco(
+        postalCode,
+        result[0].postalCode,
       );
 
-      const result: ResponseStoreDto[] = [];
-
-      for (let i = 0; i < stores.length; i++) {
-        const store = {
-          name: stores[i].storeName,
-          city: stores[i].city,
-          postalCode: stores[i].postalCode,
-          type: stores[i].type,
-          distance: distance[i].distance.text,
-          distanceValue: distance[i].distance.value,
-          value: [
-            {
-              prazo: `${stores[i].shippingTimeInDays} dias úteis`,
-              price: `R$ 15,00`,
-              description: `Motoboy`,
-            },
-          ],
+      for (let i = 0; i < 2; i++) {
+        result[0].value[i] = {
+          prazo: `${melhorEnvio[i].delivery_time + stores[0].shippingTimeInDays!} dias úteis`,
+          price: `R$ ${melhorEnvio[i].price}`,
+          description: `${melhorEnvio[i].name}`,
         };
-        result.push(store);
       }
-
-      result.sort((a, b) => a.distanceValue! - b.distanceValue!);
-
-      if (result[0].type === 'LOJA' || result[0].distanceValue! > 50000) {
-        const melhorEnvio = await this.melhorEnvioService.getPreco(
-          postalCode,
-          result[0].postalCode,
-        );
-
-        for (let i = 0; i < 2; i++) {
-          result[0].value[i] = {
-            prazo: `${melhorEnvio[i].delivery_time + stores[0].shippingTimeInDays!} dias úteis`,
-            price: `R$ ${melhorEnvio[i].price}`,
-            description: `${melhorEnvio[i].name}`,
-          };
-        }
-      }
-
-      result.forEach((store) => delete store.distanceValue);
-
-      return result[0];
-    } catch (error) {
-      throw new Error('cep não encontrado');
     }
+
+    result.forEach((store) => delete store.distanceValue);
+
+    const response = {
+      store: result[0],
+      limit: 1,
+      offset: 0,
+      total: 1,
+    };
+
+    return response;
   }
 }
