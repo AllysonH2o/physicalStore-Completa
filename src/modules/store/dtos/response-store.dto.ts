@@ -1,5 +1,11 @@
 type StoreType = 'PDV' | 'LOJA';
 
+class Preco {
+  prazo: string;
+  price: string;
+  description: string;
+}
+
 export class ResponseStoreDto {
   name: string;
   city: string;
@@ -7,4 +13,5 @@ export class ResponseStoreDto {
   type: StoreType;
   distance: string;
   distanceValue?: number;
+  value: Preco[];
 }

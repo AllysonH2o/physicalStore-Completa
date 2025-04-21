@@ -6,6 +6,7 @@ import { CreateStoreDto } from './dtos/create-store.dto';
 import { ResponseStoreDto } from './dtos/response-store.dto';
 import { ViaCepService } from 'src/common/external-apis/viaCep/viacep.service';
 import { GoogleService } from 'src/common/external-apis/google/google.service';
+import { MelhorEnvioService } from 'src/common/external-apis/melhorEnvio/melhor-envio.service';
 
 @Injectable()
 export class StoreService {
@@ -13,6 +14,7 @@ export class StoreService {
     @InjectModel(Store.name) private storeModel: Model<StoreDocument>,
     private readonly viaCepService: ViaCepService,
     private readonly googleService: GoogleService,
+    private readonly melhorEnvioService: MelhorEnvioService,
   ) {}
 
   async create(createStoreDto: CreateStoreDto) {
@@ -62,7 +64,7 @@ export class StoreService {
     return this.storeModel.find().exec();
   }
 
-  async findByCep(postalCode: string): Promise<ResponseStoreDto[]> {
+  async findByCep(postalCode: string): Promise<ResponseStoreDto> {
     try {
       const viaCep = await this.viaCepService.viaCep(postalCode);
 
@@ -91,15 +93,37 @@ export class StoreService {
           type: stores[i].type,
           distance: distance[i].distance.text,
           distanceValue: distance[i].distance.value,
+          value: [
+            {
+              prazo: `${stores[i].shippingTimeInDays} dias úteis`,
+              price: `R$ 15,00`,
+              description: `Motoboy`,
+            },
+          ],
         };
         result.push(store);
       }
 
       result.sort((a, b) => a.distanceValue! - b.distanceValue!);
 
+      if (result[0].type === 'LOJA' || result[0].distanceValue! > 50000) {
+        const melhorEnvio = await this.melhorEnvioService.getPreco(
+          postalCode,
+          result[0].postalCode,
+        );
+
+        for (let i = 0; i < 2; i++) {
+          result[0].value[i] = {
+            prazo: `${melhorEnvio[i].delivery_time + stores[0].shippingTimeInDays!} dias úteis`,
+            price: `R$ ${melhorEnvio[i].price}`,
+            description: `${melhorEnvio[i].name}`,
+          };
+        }
+      }
+
       result.forEach((store) => delete store.distanceValue);
 
-      return result;
+      return result[0];
     } catch (error) {
       throw new Error('cep não encontrado');
     }

@@ -21,7 +21,7 @@ export class StoreController {
   @Get(':postalCode')
   async findByCep(
     @Param('postalCode') postalCode: string,
-  ): Promise<ResponseStoreDto[]> {
+  ): Promise<ResponseStoreDto> {
     return this.storeService.findByCep(postalCode);
   }
 }
