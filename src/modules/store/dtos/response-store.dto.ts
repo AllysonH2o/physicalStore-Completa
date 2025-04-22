@@ -1,10 +1,8 @@
-type StoreType = 'PDV' | 'LOJA';
+import { StoreDto } from './store.dto';
 
 export class ResponseStoreDto {
-  name: string;
-  city: string;
-  postalCode: string;
-  type: StoreType;
-  distance: string;
-  distanceValue?: number;
+  store: StoreDto;
+  limit: number;
+  offset: number;
+  total: number;
 }

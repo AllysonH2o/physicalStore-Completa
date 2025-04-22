@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import axios from 'axios';
 import { GetCoords } from '../dtos/google-get-coods.dto';
 import { getDistance } from '../dtos/google-get-distance.dto';
@@ -15,7 +19,7 @@ export class GoogleService {
       return response.data.results[0].geometry.location;
     } catch (error) {
       this.logger.error(`Erro na api GoogleMaps. ${error.message}`);
-      throw error;
+      throw new InternalServerErrorException('Ocorreu um erro inesperado');
     }
   }
 
@@ -30,7 +34,7 @@ export class GoogleService {
       return response.data.rows[0].elements;
     } catch (error) {
       this.logger.error(`Erro na api GoogleMaps. ${error.message}`);
-      throw error;
+      throw new InternalServerErrorException('Ocorreu um erro inesperado');
     }
   }
 }
