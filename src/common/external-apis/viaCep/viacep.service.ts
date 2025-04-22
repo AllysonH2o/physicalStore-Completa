@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import axios from 'axios';
 import { ViaCepDto } from '../dtos/viacep.dto';
 
@@ -16,7 +20,7 @@ export class ViaCepService {
       this.logger.error(
         `Erro na api viaCep ao acessar o cep ${postalCode}: ${error.message}`,
       );
-      throw error;
+      throw new InternalServerErrorException('Ocorreu um erro inesperado');
     }
   }
 }

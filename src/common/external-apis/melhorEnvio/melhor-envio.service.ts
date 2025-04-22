@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import axios from 'axios';
 import { MelhorEnvioDto } from '../dtos/melhorenvio.dto';
 
@@ -45,7 +49,7 @@ export class MelhorEnvioService {
       return response.data;
     } catch (error) {
       this.logger.error(`Erro na api MelhorEnivo. ${error.message}`);
-      throw error;
+      throw new InternalServerErrorException('Ocorreu um erro inesperado');
     }
   }
 }

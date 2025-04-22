@@ -11,9 +11,9 @@ export class StoreDto {
   city: string;
   postalCode: string;
   type: StoreType;
-  distance: string;
+  distance?: string;
   distanceValue?: number;
-  value: Preco[];
+  value?: Preco[];
   pin: {
     position: {
       lat: string;

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Store, StoreDocument } from './schemas/store.schema';
@@ -8,9 +8,12 @@ import { ResponseStoreDto } from './dtos/response-store.dto';
 import { ViaCepService } from 'src/common/external-apis/viaCep/viacep.service';
 import { GoogleService } from 'src/common/external-apis/google/google.service';
 import { MelhorEnvioService } from 'src/common/external-apis/melhorEnvio/melhor-envio.service';
+import { error } from 'console';
 
 @Injectable()
 export class StoreService {
+  private readonly logger = new Logger(StoreService.name);
+
   constructor(
     @InjectModel(Store.name) private storeModel: Model<StoreDocument>,
     private readonly viaCepService: ViaCepService,
@@ -57,11 +60,30 @@ export class StoreService {
     return store;
   }
 
+  async findById(id: string): Promise<StoreDto> {
+    const store = await this.storeModel.findById(id).exec();
+
+    if (!store) throw new NotFoundException(`Loja com ID ${id} não encontrada`);
+
+    return this.mapResponse(store);
+  }
+
+  async findByState(state: string): Promise<StoreDto[]> {
+    const store = await this.storeModel.find({ state }).exec();
+
+    if (!store)
+      throw new NotFoundException(`Nenhuma loja encontrada no estado ${state}`);
+
+    return store.map((store) => this.mapResponse(store));
+  }
+
   private async getInfo(postalCode: string) {
     const viaCep = await this.viaCepService.viaCep(postalCode);
 
-    if (viaCep.erro) throw new Error('cep não encontrado');
-
+    if (viaCep.erro) {
+      this.logger.error(`Erro ao buscar no cep: ${postalCode}, ${viaCep.erro}`);
+      throw new NotFoundException('cep não encontrado');
+    }
     const {
       logradouro: address,
       bairro: district,
@@ -95,33 +117,22 @@ export class StoreService {
 
     const distance = await this.googleService.getDistance(origin, destinations);
 
-    const result: StoreDto[] = [];
+    const storesDto: StoreDto[] = stores.map((store) =>
+      this.mapResponse(store),
+    );
 
-    for (let i = 0; i < stores.length; i++) {
-      const store = {
-        name: stores[i].storeName,
-        city: stores[i].city,
-        postalCode: stores[i].postalCode,
-        type: stores[i].type,
-        distance: distance[i].distance.text,
-        distanceValue: distance[i].distance.value,
-        value: [
-          {
-            prazo: `${stores[i].shippingTimeInDays} dias úteis`,
-            price: `R$ 15,00`,
-            description: `Motoboy`,
-          },
-        ],
-        pin: {
-          position: {
-            lat: stores[i].latitude,
-            lng: stores[i].longitude,
-          },
-          title: stores[i].storeName,
+    const result: StoreDto[] = storesDto.map((store, i) => ({
+      ...store,
+      distance: distance[i].distance.text,
+      distanceValue: distance[i].distance.value,
+      value: [
+        {
+          prazo: `${stores[i].shippingTimeInDays} dias úteis`,
+          price: `R$ 15,00`,
+          description: `Motoboy`,
         },
-      };
-      result.push(store);
-    }
+      ],
+    }));
 
     result.sort((a, b) => a.distanceValue! - b.distanceValue!);
 
@@ -132,7 +143,7 @@ export class StoreService {
       );
 
       for (let i = 0; i < 2; i++) {
-        result[0].value[i] = {
+        result[0].value![i] = {
           prazo: `${melhorEnvio[i].delivery_time + stores[0].shippingTimeInDays!} dias úteis`,
           price: `R$ ${melhorEnvio[i].price}`,
           description: `${melhorEnvio[i].name}`,
@@ -150,5 +161,21 @@ export class StoreService {
     };
 
     return response;
+  }
+
+  private mapResponse(store: Store): StoreDto {
+    return {
+      name: store.storeName,
+      city: store.city,
+      postalCode: store.postalCode,
+      type: store.type,
+      pin: {
+        position: {
+          lat: store.latitude,
+          lng: store.longitude,
+        },
+        title: store.storeName,
+      },
+    };
   }
 }
