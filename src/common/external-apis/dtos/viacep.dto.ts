@@ -4,6 +4,5 @@ export class ViaCepDto {
   bairro: string;
   localidade: string;
   uf: string;
-  estado: string;
   erro?: string;
 }
