@@ -1,7 +1,6 @@
 import { Controller, Post, Body, Get, Param } from '@nestjs/common';
 import { StoreService } from './store.service';
 import { CreateStoreDto } from './dtos/create-store.dto';
-import { ResponseStoreDto } from './dtos/response-store.dto';
 import { Store } from './schemas/store.schema';
 import { StoreDto } from './dtos/store.dto';
 
@@ -20,9 +19,7 @@ export class StoreController {
   }
 
   @Get('postalcode/:postalCode')
-  async findByCep(
-    @Param('postalCode') postalCode: string,
-  ): Promise<ResponseStoreDto> {
+  async findByCep(@Param('postalCode') postalCode: string): Promise<StoreDto> {
     return this.storeService.findByCep(postalCode);
   }
 

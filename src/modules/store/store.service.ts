@@ -1,14 +1,17 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Store, StoreDocument } from './schemas/store.schema';
 import { CreateStoreDto } from './dtos/create-store.dto';
 import { StoreDto } from './dtos/store.dto';
-import { ResponseStoreDto } from './dtos/response-store.dto';
-import { ViaCepService } from 'src/common/external-apis/viaCep/viacep.service';
-import { GoogleService } from 'src/common/external-apis/google/google.service';
-import { MelhorEnvioService } from 'src/common/external-apis/melhorEnvio/melhor-envio.service';
-import { error } from 'console';
+import { ViaCepService } from '../../common/external-apis/viaCep/viacep.service';
+import { GoogleService } from '../../common/external-apis/google/google.service';
+import { MelhorEnvioService } from '../../common/external-apis/melhorEnvio/melhor-envio.service';
 
 @Injectable()
 export class StoreService {
@@ -48,7 +51,7 @@ export class StoreService {
     return this.storeModel.find().exec();
   }
 
-  async findByCep(postalCode: string): Promise<ResponseStoreDto> {
+  async findByCep(postalCode: string): Promise<StoreDto> {
     const infoStore = await this.getInfo(postalCode);
 
     const origin = `${infoStore.latitude},${infoStore.longitude}`;
@@ -71,7 +74,7 @@ export class StoreService {
   async findByState(state: string): Promise<StoreDto[]> {
     const store = await this.storeModel.find({ state }).exec();
 
-    if (!store)
+    if (store.length === 0)
       throw new NotFoundException(`Nenhuma loja encontrada no estado ${state}`);
 
     return store.map((store) => this.mapResponse(store));
@@ -82,7 +85,7 @@ export class StoreService {
 
     if (viaCep.erro) {
       this.logger.error(`Erro ao buscar no cep: ${postalCode}, ${viaCep.erro}`);
-      throw new NotFoundException('cep não encontrado');
+      throw new BadRequestException('cep não encontrado');
     }
     const {
       logradouro: address,
@@ -153,14 +156,7 @@ export class StoreService {
 
     result.forEach((store) => delete store.distanceValue);
 
-    const response = {
-      store: result[0],
-      limit: 1,
-      offset: 0,
-      total: 1,
-    };
-
-    return response;
+    return result[0];
   }
 
   private mapResponse(store: Store): StoreDto {
