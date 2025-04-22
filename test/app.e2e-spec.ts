@@ -6,7 +6,7 @@ import { AppModule } from './../src/app.module';
 
 jest.setTimeout(20000);
 
-describe('AppController (e2e)', () => {
+describe('StoreController (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {

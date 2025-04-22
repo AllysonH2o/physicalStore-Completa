@@ -9,6 +9,7 @@ import { Model } from 'mongoose';
 import { Store, StoreDocument } from './schemas/store.schema';
 import { CreateStoreDto } from './dtos/create-store.dto';
 import { StoreDto } from './dtos/store.dto';
+import { StoreDistanceDto } from './dtos/store-distance.dto';
 import { ViaCepService } from '../../common/external-apis/viaCep/viacep.service';
 import { GoogleService } from '../../common/external-apis/google/google.service';
 import { MelhorEnvioService } from '../../common/external-apis/melhorEnvio/melhor-envio.service';
@@ -24,7 +25,7 @@ export class StoreService {
     private readonly melhorEnvioService: MelhorEnvioService,
   ) {}
 
-  async create(createStoreDto: CreateStoreDto) {
+  async create(createStoreDto: CreateStoreDto): Promise<StoreDto> {
     const { postalCode } = createStoreDto;
 
     const infoStore = await this.getInfo(postalCode);
@@ -44,14 +45,18 @@ export class StoreService {
     };
 
     const newStore = new this.storeModel(createStore);
-    return newStore.save();
+    newStore.save();
+
+    return this.mapResponse(newStore);
   }
 
-  async findAll(): Promise<Store[]> {
-    return this.storeModel.find().exec();
+  async findAll(): Promise<StoreDto[]> {
+    const store = await this.storeModel.find().exec();
+
+    return store.map((store) => this.mapResponse(store));
   }
 
-  async findByCep(postalCode: string): Promise<StoreDto> {
+  async findByCep(postalCode: string): Promise<StoreDistanceDto> {
     const infoStore = await this.getInfo(postalCode);
 
     const origin = `${infoStore.latitude},${infoStore.longitude}`;
@@ -113,7 +118,11 @@ export class StoreService {
     return infoStore;
   }
 
-  private async getStore(stores: Store[], origin: string, postalCode: string) {
+  private async getStore(
+    stores: Store[],
+    origin: string,
+    postalCode: string,
+  ): Promise<StoreDistanceDto> {
     const destinations = stores
       .map((store) => `${store.latitude},${store.longitude}`)
       .join('|');
@@ -124,7 +133,7 @@ export class StoreService {
       this.mapResponse(store),
     );
 
-    const result: StoreDto[] = storesDto.map((store, i) => ({
+    const result: StoreDistanceDto[] = storesDto.map((store, i) => ({
       ...store,
       distance: distance[i].distance.text,
       distanceValue: distance[i].distance.value,
